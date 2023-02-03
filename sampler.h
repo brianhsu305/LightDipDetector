@@ -5,6 +5,9 @@
 #ifndef _SAMPLER_H_
 #define _SAMPLER_H_
 
+// get the reading from the light sensor
+int getVoltage1Reading(void);
+
 // Begin/end the background thread which samples light levels.
 void Sampler_startSampling(void); 
 void Sampler_stopSampling(void);
