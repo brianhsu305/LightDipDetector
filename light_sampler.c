@@ -1,16 +1,19 @@
-// The will be the main program
 #include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
 #include "sampler.h"
 
+void *myfunc()
+{
+    Sampler_startSampling();
+    return NULL;
+}
 
-int main(int argc, char* args[]) {
-    // Tasks:
-    // Analog to digital (A2D) reading (potentiometer and light sensor)
-    int reading = getVoltage1Reading();
-    printf("Value %5d \n", reading); 
-    // Output on a 14-segment display using I2C
-    // UDP networking
-    // pthread threads and thread synchronization
-    // C-programming with malloc() / free()
+int main(int argc, char *argv[])
+{
+    pthread_t myThread;
+    pthread_create(&myThread, NULL, myfunc, NULL);
+    
+    pthread_join(myThread, NULL);
     return 0;
 }
