@@ -6,7 +6,7 @@
 
 // Reference: https://stackoverflow.com/questions/827691/how-do-you-implement-a-circular-buffer-in-c
 // initialize the circular buffer
-void buffer_init(circular_buffer *cb, int bufferSize, int sz)
+void buffer_init(circular_buffer *cb, int bufferSize, size_t sz)
 {
     cb->buffer = malloc(bufferSize * sz);
     if (cb->buffer == NULL)
@@ -36,15 +36,15 @@ void buffer_free(circular_buffer *cb)
 // add data to the light sample buffer
 void buffer_AddData(circular_buffer *cb, void *item)
 {
-    // if samples are more than the buffer length
+    // if buffer is full
     if (cb->count == cb->length)
     {
-        printf("buffer is full, replacing the head with new data");
         // reset the head pointer
         cb->head = cb->buffer;
     }
     // copy the new item in the head buffer
     memcpy(cb->head, item, cb->sz);
+    // printf("data: %d\n", *cb->head);
     cb->head = (char *)cb->head + cb->sz;
     if (cb->head == cb->buffer_end)
         cb->head = cb->buffer;
