@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include "circular_buffer.h"
+#include "periodTimer.h"
 
 #define A2D_FILE_VOLTAGE1 "/sys/bus/iio/devices/iio:device0/in_voltage1_raw"
 #define A2D_FILE_VOLTAGE0 "/sys/bus/iio/devices/iio:device0/in_voltage0_raw"
@@ -17,6 +18,7 @@ static long long bufferSize = 10000;
 circular_buffer lightSampleBuffer;
 static bool readingData = true;
 static int potValue;
+static int historySize;
 static double avgLightLevel = -1;
 
 void sleepForMs(long long delayInMs)
@@ -90,11 +92,10 @@ void Sampler_setHistorySize(int newSize)
 int Sampler_getHistorySize(void)
 {
     potValue = getVoltageReading(A2D_FILE_VOLTAGE0);
-    if (potValue == 0)
-    {
-        potValue = 1;
-    }
     // printf("POT reader: %d\n", potValue);
+    if (potValue == 0) {
+        return 1;
+    }
     return potValue;
 }
 
@@ -153,6 +154,8 @@ void printData()
     {
         pthread_mutex_lock(&myMutex);
 
+
+        historySize = Sampler_getNumSamplesInHistory();     
         Sampler_setHistorySize(Sampler_getHistorySize());
 
         pthread_mutex_unlock(&myMutex);
@@ -163,7 +166,7 @@ void printData()
         // avg light level, displayed as a voltage with 3 decimal places
         // # of light level dips that have been found in sample history
         // timinig jitter information (provided bt periodTimer.h / .c)
-        printf("Samples/s = %lld Pot Value = %d history size = %d avg = %.3f dips = %d Sampling[%.3f, %.3f] avg%.3f/%d \n", lightSampleBuffer.count, potValue, 551, 1.307, 0, 1.403, 4.002, 1.836, 550);
+        printf("Samples/s = %lld Pot Value = %d history size = %d avg = %.3f dips = %d Sampling[%.3f, %.3f] avg%.3f/%d \n", lightSampleBuffer.count, potValue, historySize, avgLightLevel, 0, 1.403, 4.002, 1.836, 550);
         // Line 2:
         // display every 200th samples in the sample history
         // show the oldest of these samples on the left, the newest of these samples on the right
