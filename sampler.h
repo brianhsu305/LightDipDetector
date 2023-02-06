@@ -11,6 +11,9 @@ void sleepForMs(long long delayInMs);
 // get the reading from the light sensor
 int getVoltageReading(char* voltagePath);
 
+//print related data
+void printData();
+
 // Begin/end the background thread which samples light levels.
 void Sampler_startSampling(void);
 void Sampler_stopSampling(void);
@@ -35,7 +38,5 @@ double Sampler_getAverageReading(void);
 // Get the total number of light level samples taken so far.
 long long Sampler_getNumSamplesTaken(void);
 
-// Print terminal data with related information 
-void printData(void);
 
 #endif

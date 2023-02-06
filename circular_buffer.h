@@ -3,18 +3,15 @@
 
 typedef struct circular_buffer
 {
-    int *buffer;
-    void *head;
-    void *tail;
-    void* buffer_end;
-    int length;
-    int sz;
-    int count; // # of samples scanned (could be bigger than buffer size)
-    bool full;
+    double *buffer;
+    int head;
+    int tail;
+    int size;
+    long long count; // # of samples scanned (could be bigger than buffer size)
 } circular_buffer;
 
-void buffer_init(circular_buffer *cb, int bufferSize, size_t sz);
+void buffer_init(circular_buffer *cb, int bufferSize);
 void buffer_free(circular_buffer *cb);
-void buffer_AddData(circular_buffer *cb, void* item);
+void buffer_AddData(circular_buffer *cb, int item);
 
 #endif

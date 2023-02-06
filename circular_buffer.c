@@ -6,21 +6,19 @@
 
 // Reference: https://stackoverflow.com/questions/827691/how-do-you-implement-a-circular-buffer-in-c
 // initialize the circular buffer
-void buffer_init(circular_buffer *cb, int bufferSize, size_t sz)
+void buffer_init(circular_buffer *cb, int bufferSize)
 {
-    cb->buffer = malloc(bufferSize * sz);
+    cb->buffer = malloc(sizeof(double) * (bufferSize + 1));
     if (cb->buffer == NULL)
     {
         printf("the buffer is NULL\n");
     }
 
-    cb->head = cb->buffer;
-    cb->tail = cb->tail;
-    cb->buffer_end = (char *)cb->buffer + bufferSize * sz;
-    cb->length = bufferSize;
-    cb->sz = sz;
+    // head and tail are initialized as index 0
+    cb->head = 0;
+    cb->tail = 0;
+    cb->size = bufferSize;
     cb->count = 0;
-    cb->full = false;
     return;
 }
 
@@ -28,26 +26,27 @@ void buffer_init(circular_buffer *cb, int bufferSize, size_t sz)
 void buffer_free(circular_buffer *cb)
 {
     free(cb->buffer);
-    cb->head = NULL;
-    cb->tail = NULL;
+    // cb->head = NULL;
+    // cb->tail = NULL;
     return;
 }
 
 // add data to the light sample buffer
-void buffer_AddData(circular_buffer *cb, void *item)
+void buffer_AddData(circular_buffer *cb, int item)
 {
-    // if buffer is full
-    if (cb->count == cb->length)
+    // if buffer has looped
+    // printf("before if %lld\n", cb->count % cb->size);
+    // printf("count=%lld, size=%d\n", cb->count, cb->size);
+    if (cb->count % cb->size == 0)
     {
-        // reset the head pointer
-        cb->head = cb->buffer;
+        // reset the head index to 0
+        // printf("INSIDE IF ADD DATA, count=%lld, size=%d", cb->count, cb->size);
+        cb->head = 0;
     }
-    // copy the new item in the head buffer
-    memcpy(cb->head, item, cb->sz);
-    // printf("data: %d\n", *cb->head);
-    cb->head = (char *)cb->head + cb->sz;
-    if (cb->head == cb->buffer_end)
-        cb->head = cb->buffer;
+
+    cb->buffer[cb->head] = item;            // head ==0,1,2,3,4,5(loops, make it 0)
+    cb->head = (cb->head + 1) % (cb->size); // head==1,2,3,4,5,1
     cb->count++;
+    // printf("count is %lld head is %d, head value is %d\n",cb->count, cb->head, cb->buffer[cb->head]);
     return;
 }
