@@ -96,6 +96,7 @@ double *Sampler_getHistory(int *length)
 {
     double *copySample;
     copySample = malloc(sizeof(double) * (*length + 1));
+
     memcpy(copySample, &lightSampleBuffer.buffer, *length);
     return copySample;
 }

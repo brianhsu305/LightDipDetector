@@ -1,6 +1,7 @@
 {
 	"files.associations": {
 		"*.sass": "scss",
-		"stdlib.h": "c"
+		"stdlib.h": "c",
+		"udp_sockets.h": "c"
 	}
 }
