@@ -17,6 +17,14 @@ void Sampler_printData();
 //detect for the number of dips
 void Sampler_dipDetection(void);
 
+// Initialize Sampler sampling pthread
+void Sampler_samplingThreadInit(void);
+void *Sampler_samplingThreadFunc(void);
+
+// Initialize Sampler Print data pthread
+void Sampler_printThreadInit(void);
+void *Sampler_printThreadFunc(void);
+
 // Begin/end the background thread which samples light levels.
 void Sampler_startSampling(void);
 void Sampler_stopSampling(void);

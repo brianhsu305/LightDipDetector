@@ -13,6 +13,7 @@
 #define A2D_MAX_READING 4095
 #define EXPONENTIAL_WEIGHT_VALUE 0.001
 
+pthread_t lightSampleThread, printDataThread;
 static pthread_mutex_t myMutex = PTHREAD_MUTEX_INITIALIZER;
 static long long bufferSize = 10000;
 circular_buffer lightSampleBuffer;
@@ -106,7 +107,7 @@ void Sampler_dipDetection()
     // buffer_init(&copyBuffer, lightSampleBuffer.size);
     // copyBuffer.buffer = Sampler_getHistory(&lightSampleBuffer.size);
 
-    // Calculate average light level in history 
+    // Calculate average light level in history
     // double avgHistoryLightLevel = 0;
     // for (int i = 0; i < lightSampleBuffer.size; i++)
     // {
@@ -158,6 +159,8 @@ void Sampler_startSampling(void)
 void Sampler_stopSampling(void)
 {
     readingData = false;
+    pthread_join(lightSampleThread, NULL);
+    pthread_join(printDataThread, NULL);
     buffer_free(&lightSampleBuffer);
     return;
 }
@@ -230,4 +233,25 @@ void Sampler_printData()
     }
 
     return;
+}
+
+void *Sampler_samplingThreadFunc()
+{
+    Sampler_startSampling();
+    return NULL;
+}
+
+void *Sampler_printThreadFunc()
+{
+    Sampler_printData();
+    return NULL;
+}
+
+void Sampler_samplingThreadInit()
+{
+    pthread_create(&lightSampleThread, NULL, Sampler_samplingThreadFunc, NULL);
+}
+
+void Sampler_printThreadInit() {
+    pthread_create(&printDataThread, NULL, Sampler_printThreadFunc, NULL);
 }

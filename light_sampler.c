@@ -5,12 +5,6 @@
 #include "sampler.h"
 #include "udp_sockets.h"
 
-void *samplerLight()
-{
-    Sampler_startSampling();
-    return NULL;
-}
-
 void *samplerPrintData()
 {
     Sampler_printData();
@@ -20,14 +14,8 @@ void *samplerPrintData()
 int main(int argc, char *argv[])
 {
     // create threads
-    pthread_t lightSampleThread;
-    pthread_t printDataThread;
-    pthread_create(&lightSampleThread, NULL, samplerLight, NULL);
-    pthread_create(&printDataThread, NULL, samplerPrintData, NULL);
-    UDP_serverInit();
-
-    //end program
-    pthread_join(lightSampleThread, NULL);
-    pthread_join(printDataThread, NULL);
+    Sampler_samplingThreadInit();
+    Sampler_printThreadInit();
+    UDP_threadInit();
     return 0;
 }
