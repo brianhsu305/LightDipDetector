@@ -92,20 +92,21 @@ void UDP_replyLength()
 
 void UDP_replyHistory()
 {
-    char messageTx[MAX_LEN];
-    int freeSpace = MAX_LEN;
-    int size = Sampler_getHistorySize();
-    double *history = Sampler_getHistory(&size);
-    for (int i=0; history!=NULL; i++) {
-        snprintf(messageTx, MAX_LEN, "%.3f, ", *history);
-        freeSpace = freeSpace - strnlen(messageTx, MAX_LEN) - 1;
-    }
-
-    // freeSpace = MAX_LEN - strnlen(messageTx, MAX_LEN) - 1;
-
-    // Send reply
-    sin_len = sizeof(sinRemote);
-    sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    // char messageTx[MAX_LEN];
+    // char buf[MAX_LEN];
+    // int freeSpace = MAX_LEN;
+    // int size = Sampler_getHistorySize();
+    // double *history = Sampler_getHistory(&size);
+    // printf("HELOO %f\n", *history);
+    // for (int i=0; i<size; i++) {
+        
+    //     snprintf(buf, freeSpace, "%.3f, ", history+1);
+    //     strncat(messageTx, buf, freeSpace);
+    //     freeSpace = freeSpace - strnlen(messageTx, MAX_LEN) - 1;
+    // }
+    // // Send reply
+    // sin_len = sizeof(sinRemote);
+    // sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
 }
 
 void UDP_replyGet()
@@ -123,9 +124,7 @@ void UDP_replyGet()
 void UDP_replyDips()
 {
     char messageTx[MAX_LEN];
-    // int freeSpace;
-    snprintf(messageTx, MAX_LEN, "Number of samples taken = %lld\n", Sampler_getNumSamplesTaken());
-    // freeSpace = MAX_LEN - strnlen(messageTx, MAX_LEN) - 1;
+    snprintf(messageTx, MAX_LEN, "Dips = %d\n", Sampler_getDipCount());
 
     // Send reply
     sin_len = sizeof(sinRemote);
@@ -135,13 +134,14 @@ void UDP_replyDips()
 void UDP_replyStop()
 {
     char messageTx[MAX_LEN];
-    // int freeSpace;
-    snprintf(messageTx, MAX_LEN, "Number of samples taken = %lld\n", Sampler_getNumSamplesTaken());
-    // freeSpace = MAX_LEN - strnlen(messageTx, MAX_LEN) - 1;
+    snprintf(messageTx, MAX_LEN, "Program Terminating.\n");
+    
 
     // Send reply
     sin_len = sizeof(sinRemote);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    close(socketDescriptor);
+    Sampler_stopSampling();
 }
 
 void UDP_replyEnter()
@@ -191,10 +191,6 @@ void UDP_receiveData()
     {
         UDP_replyEnter();
     }
-    else
-    {
-        printf("fuck youuuuuuuuuuuuuuuuuuuu %s\n", messageRx);
-    }
 
     printf("Message received (%d bytes): '%s'", bytesRx, messageRx);
 }
@@ -206,7 +202,6 @@ void *UDP_threadFunc()
     {
         UDP_receiveData();
     }
-    close(socketDescriptor);
     return NULL;
 }
 

@@ -38,15 +38,14 @@
 #define SECONDS 0
 #define NANOSECONDS 5000000
 
-pthread_t segDisplayThread;
 struct timespec reqDelay = {
     SECONDS,
     NANOSECONDS};
 
 // Green Zen Cape
-// static int digitReg[10][2] = {{0x86, 0xA1}, {0x12, 0x80}, {0x0F, 0x31}, {0x06, 0xB0}, {0x8A, 0x90}, {0x8C, 0xB0}, {0x8C, 0xB1}, {0x14, 0x04}, {0x8E, 0xB1}, {0x8E, 0x90}};
+static int digitReg[10][2] = {{0x86, 0xA1}, {0x12, 0x80}, {0x0F, 0x31}, {0x06, 0xB0}, {0x8A, 0x90}, {0x8C, 0xB0}, {0x8C, 0xB1}, {0x14, 0x04}, {0x8E, 0xB1}, {0x8E, 0x90}};
 // Red Zen Cape
-static int digitReg[10][2] = {{0xD0, 0xA1}, {0x00, 0xA0}, {0x98, 0x83}, {0x18, 0xA3}, {0x48, 0xA2}, {0x58, 0x63}, {0xD8, 0x63}, {0x50, 0xA0}, {0xD8, 0xA3}, {0x58, 0xA3}};
+// static int digitReg[10][2] = {{0xD0, 0xA1}, {0x00, 0xA0}, {0x98, 0x83}, {0x18, 0xA3}, {0x48, 0xA2}, {0x58, 0x63}, {0xD8, 0x63}, {0x50, 0xA0}, {0xD8, 0xA3}, {0x58, 0xA3}};
 
 // Used to run commands on a terminal (for config I2C and GPIO setup)
 static void runCommand(char *command)
@@ -138,21 +137,18 @@ void Seg_turnOffSegDisplay(void)
 void Seg_displayDigits(int displayDigit, char *i2cDigitDirectionPath)
 {
     int i2cFileDesc = initI2cBus(I2CDRV_LINUX_BUS1, I2C_DEVICE_ADDRESS);
-    // Green Zen Cape
-    // writeI2cReg(i2cFileDesc, RED_REG_DIRA, 0x00);
-    // writeI2cReg(i2cFileDesc, RED_REG_DIRB, 0x00);
 
-    // Red Zen Cape
+    // Green Zen Cape
     writeI2cReg(i2cFileDesc, RED_REG_DIRA, 0x00);
     writeI2cReg(i2cFileDesc, RED_REG_DIRB, 0x00);
-
-    // Green Zen Cape
-    // writeI2cReg(i2cFileDesc, REG_OUTA, digitReg[displayDigit][0]);
-    // writeI2cReg(i2cFileDesc, REG_OUTB, digitReg[displayDigit][1]);
+    writeI2cReg(i2cFileDesc, REG_OUTA, digitReg[displayDigit][0]);
+    writeI2cReg(i2cFileDesc, REG_OUTB, digitReg[displayDigit][1]);
 
     // Red Zen Cape
-    writeI2cReg(i2cFileDesc, RED_REG_OUTA, digitReg[displayDigit][0]);
-    writeI2cReg(i2cFileDesc, RED_REG_OUTB, digitReg[displayDigit][1]);
+    // writeI2cReg(i2cFileDesc, RED_REG_DIRA, 0x00);
+    // writeI2cReg(i2cFileDesc, RED_REG_DIRB, 0x00);
+    // writeI2cReg(i2cFileDesc, RED_REG_OUTA, digitReg[displayDigit][0]);
+    // writeI2cReg(i2cFileDesc, RED_REG_OUTB, digitReg[displayDigit][1]);
 
     openFileToWrite(i2cDigitDirectionPath, "1");
     nanosleep(&reqDelay, (struct timespec *)NULL);
@@ -170,15 +166,5 @@ void Seg_init(void)
     {
         runCommand(configArray[i]);
     }
-    pthread_join(segDisplayThread, NULL);
     return;
-}
-
-void * segDisplay_threadFunc(){
-    Seg_init();
-    return NULL;
-}
-
-void segDisplay_threadInit() {
-    pthread_create(segDisplayThread, NULL, segDisplay_threadFunc, NULL);
 }

@@ -4,20 +4,26 @@
 #include <pthread.h>
 #include <string.h>
 #include <time.h>
+
 #include "circular_buffer.h"
 #include "periodTimer.h"
+#include "segDisplay.h"
+#include "udp_sockets.h"
 
 #define A2D_FILE_VOLTAGE1 "/sys/bus/iio/devices/iio:device0/in_voltage1_raw"
 #define A2D_FILE_VOLTAGE0 "/sys/bus/iio/devices/iio:device0/in_voltage0_raw"
 #define A2D_VOLTAGE_REF_V 1.8
 #define A2D_MAX_READING 4095
 #define EXPONENTIAL_WEIGHT_VALUE 0.001
+#define I2C_RIGHT_DIGIT "/sys/class/gpio/gpio44/value"
+#define I2C_LEFT_DIGIT "/sys/class/gpio/gpio61/value"
 
-pthread_t lightSampleThread, printDataThread;
+Period_statistics_t pStats;
+pthread_t lightSampleThread, printDataThread, segDisplayThread;
 static pthread_mutex_t myMutex = PTHREAD_MUTEX_INITIALIZER;
 static long long bufferSize = 10000;
 circular_buffer lightSampleBuffer;
-static bool readingData = true;
+static bool readingData = true, printingData = true;
 static int potValue;
 static int historySize;
 static double sampleLightLevel;
@@ -96,8 +102,11 @@ double *Sampler_getHistory(int *length)
 {
     double *copySample;
     copySample = malloc(sizeof(double) * (*length + 1));
-
-    memcpy(copySample, &lightSampleBuffer.buffer, *length);
+    for (int i = 0; i < *length; i++)
+    {
+        copySample[i] = lightSampleBuffer.buffer[i];
+    }
+    // memcpy(copySample, &lightSampleBuffer.buffer, *length);
     return copySample;
 }
 
@@ -140,18 +149,21 @@ void Sampler_dipDetection()
 void Sampler_startSampling(void)
 {
     buffer_init(&lightSampleBuffer, bufferSize);
+    
     while (readingData)
     {
 
         // get the light sample reading and calculate voltage
         int voltageReading = getVoltageReading(A2D_FILE_VOLTAGE1);
+        Period_markEvent(PERIOD_EVENT_SAMPLE_LIGHT);
         sampleLightLevel = ((double)voltageReading / A2D_MAX_READING) * A2D_VOLTAGE_REF_V;
-
         // add voltage sample into buffer
+        pthread_mutex_lock(&myMutex);
         buffer_AddData(&lightSampleBuffer, sampleLightLevel);
         avgLightLevel = Sampler_getAverageReading();
         // printf("Value %5d ==> %5.2fV, avgLightLevel = %.2f\n", voltageReading, sampleLightLevel, avgLightLevel);
         Sampler_dipDetection();
+        pthread_mutex_unlock(&myMutex);
         sleepForMs(1);
     }
     return;
@@ -159,16 +171,27 @@ void Sampler_startSampling(void)
 
 void Sampler_stopSampling(void)
 {
+    Period_cleanup();
     readingData = false;
+    printingData = false;
+
+    buffer_free(&lightSampleBuffer);
     pthread_join(lightSampleThread, NULL);
     pthread_join(printDataThread, NULL);
-    buffer_free(&lightSampleBuffer);
+    pthread_join(segDisplayThread, NULL);
+    exit(1);
     return;
 }
 
 // Set the maximum number of samples to store in the history.
 void Sampler_setHistorySize(int newSize)
 {
+    circular_buffer tempBuffer;
+    buffer_init(&tempBuffer, newSize);
+    tempBuffer.head = lightSampleBuffer.head;
+    tempBuffer.tail = lightSampleBuffer.tail;
+    tempBuffer.count = lightSampleBuffer.count;
+
     // set the buffer length to newSize
     lightSampleBuffer.size = newSize;
     return;
@@ -205,32 +228,54 @@ long long Sampler_getNumSamplesTaken(void)
     return lightSampleBuffer.count;
 }
 
+// Call functions in segDisplay.c to perform 2-Digit 14 Segment Display Feature
+void segDisplayDip(void)
+{
+    Seg_init();
+    while (readingData)
+    {
+        // If Dip Count is over 99, set the display Number as 99 (can only display up to 2 digits)
+        int dipNum = dipCount;
+        if (dipNum > 99)
+        {
+            dipNum = 99;
+        }
+        // separate ones and tens (Ex. 15 --> ones: 5, tens: 1)
+        int dipNumOnes = dipNum % 10;
+        int dipNumTens = (dipNum / 10) % 10;
+
+        // Turn off both digits
+        Seg_turnOffSegDisplay();
+        // Drive Display Pattern & Turn on Left Digit
+        Seg_displayDigits(dipNumTens, I2C_RIGHT_DIGIT);
+        // Turn off both digits
+        Seg_turnOffSegDisplay();
+        // Drive Display Pattern & Turn on Right Digit
+        Seg_displayDigits(dipNumOnes, I2C_LEFT_DIGIT);
+    }
+    return;
+}
+
+int Sampler_getDipCount() {
+    return dipCount;
+}
+
 // print relavent data
 void Sampler_printData()
 {
-    while (1)
+    while (printingData)
     {
+
         pthread_mutex_lock(&myMutex);
 
         historySize = Sampler_getNumSamplesInHistory();
         Sampler_setHistorySize(Sampler_getHistorySize());
-
-        pthread_mutex_unlock(&myMutex);
-        // Line 1:
-        // # of light samples taken during the last second
-        // the raw value read from the POT
-        // # of valid samples in the history
-        // avg light level, displayed as a voltage with 3 decimal places
-        // # of light level dips that have been found in sample history
-        // timinig jitter information (provided bt periodTimer.h / .c)
-        printf("Samples/s = %lld Pot Value = %d history size = %d avg = %.3f dips = %d Sampling[%.3f, %.3f] avg %.3f/%d \n", lightSampleBuffer.count, potValue, historySize, avgLightLevel, dipCount, 1.403, 4.002, 1.836, 550);
-        // Line 2:
-        // display every 200th samples in the sample history
-        // show the oldest of these samples on the left, the newest of these samples on the right
+        Period_getStatisticsAndClear(PERIOD_EVENT_SAMPLE_LIGHT, &pStats);
+        printf("Samples/s = %d Pot Value = %d history size = %d avg = %.3f dips = %d Sampling[%.3f, %.3f] avg %.3f/%d \n", pStats.numSamples, potValue, historySize, avgLightLevel, dipCount, pStats.minPeriodInMs, pStats.maxPeriodInMs, pStats.avgPeriodInMs, pStats.numSamples);
         printf("Line 2\n");
+        pthread_mutex_unlock(&myMutex);
 
         sleepForMs(1000);
-        // HINT: use a thread
     }
 
     return;
@@ -248,11 +293,17 @@ void *Sampler_printThreadFunc()
     return NULL;
 }
 
-void Sampler_samplingThreadInit()
+void *segDisplay_threadFunc()
 {
-    pthread_create(&lightSampleThread, NULL, Sampler_samplingThreadFunc, NULL);
+    segDisplayDip();
+    return NULL;
 }
 
-void Sampler_printThreadInit() {
+void Sampler_threadInit()
+{
+    Period_init();
+    pthread_create(&lightSampleThread, NULL, Sampler_samplingThreadFunc, NULL);
     pthread_create(&printDataThread, NULL, Sampler_printThreadFunc, NULL);
+    pthread_create(&segDisplayThread, NULL, segDisplay_threadFunc, NULL);
+    UDP_threadInit();
 }

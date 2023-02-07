@@ -13,7 +13,5 @@ void Seg_displayDigits(int, char *);
 // Configure the I2C and GPIO initialization Setup
 void Seg_init(void);
 
-// Initialize segDisplay thread
-void segDisplay_threadInit();
-void * segDisplay_threadFunc();
+
 #endif

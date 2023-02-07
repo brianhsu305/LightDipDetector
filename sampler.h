@@ -9,21 +9,24 @@
 void sleepForMs(long long delayInMs);
 
 // get the reading from the light sensor
-int getVoltageReading(char* voltagePath);
+int getVoltageReading(char *voltagePath);
 
-//print related data
-void Sampler_printData();
+// print related data
+void Sampler_printData(void);
 
-//detect for the number of dips
+// detect for the number of dips
 void Sampler_dipDetection(void);
 
-// Initialize Sampler sampling pthread
-void Sampler_samplingThreadInit(void);
-void *Sampler_samplingThreadFunc(void);
+// Get dip count 
+int Sampler_getDipCount();
 
-// Initialize Sampler Print data pthread
-void Sampler_printThreadInit(void);
+// Initialize all threads in sampler
+void Sampler_threadInit(void);
+
+// Initialize Sampler thread functions
+void *Sampler_samplingThreadFunc(void);
 void *Sampler_printThreadFunc(void);
+void *segDisplay_threadFunc(void);
 
 // Begin/end the background thread which samples light levels.
 void Sampler_startSampling(void);
@@ -48,6 +51,5 @@ double Sampler_getAverageReading(void);
 
 // Get the total number of light level samples taken so far.
 long long Sampler_getNumSamplesTaken(void);
-
 
 #endif
