@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+
 #include "sampler.h"
+#include "udp_sockets.h"
 
 void *samplerLight()
 {
@@ -22,6 +24,7 @@ int main(int argc, char *argv[])
     pthread_t printDataThread;
     pthread_create(&lightSampleThread, NULL, samplerLight, NULL);
     pthread_create(&printDataThread, NULL, samplerPrintData, NULL);
+    UDP_serverInit();
 
     //end program
     pthread_join(lightSampleThread, NULL);
