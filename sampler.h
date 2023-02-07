@@ -12,7 +12,10 @@ void sleepForMs(long long delayInMs);
 int getVoltageReading(char* voltagePath);
 
 //print related data
-void printData();
+void Sampler_printData();
+
+//detect for the number of dips
+void Sampler_dipDetection(void);
 
 // Begin/end the background thread which samples light levels.
 void Sampler_startSampling(void);

@@ -3,15 +3,15 @@
 #include <pthread.h>
 #include "sampler.h"
 
-void *sampleLight()
+void *samplerLight()
 {
     Sampler_startSampling();
     return NULL;
 }
 
-void *sampleAndPrintData()
+void *samplerPrintData()
 {
-    printData();
+    Sampler_printData();
     return NULL;
 }
 
@@ -20,8 +20,8 @@ int main(int argc, char *argv[])
     // create threads
     pthread_t lightSampleThread;
     pthread_t printDataThread;
-    pthread_create(&lightSampleThread, NULL, sampleLight, NULL);
-    pthread_create(&printDataThread, NULL, sampleAndPrintData, NULL);
+    pthread_create(&lightSampleThread, NULL, samplerLight, NULL);
+    pthread_create(&printDataThread, NULL, samplerPrintData, NULL);
 
     //end program
     pthread_join(lightSampleThread, NULL);

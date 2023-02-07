@@ -12,6 +12,6 @@ typedef struct circular_buffer
 
 void buffer_init(circular_buffer *cb, int bufferSize);
 void buffer_free(circular_buffer *cb);
-void buffer_AddData(circular_buffer *cb, int item);
+void buffer_AddData(circular_buffer *cb, double item);
 
 #endif

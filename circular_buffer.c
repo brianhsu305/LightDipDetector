@@ -32,21 +32,17 @@ void buffer_free(circular_buffer *cb)
 }
 
 // add data to the light sample buffer
-void buffer_AddData(circular_buffer *cb, int item)
+void buffer_AddData(circular_buffer *cb, double item)
 {
     // if buffer has looped
-    // printf("before if %lld\n", cb->count % cb->size);
-    // printf("count=%lld, size=%d\n", cb->count, cb->size);
     if (cb->count % cb->size == 0)
     {
         // reset the head index to 0
-        // printf("INSIDE IF ADD DATA, count=%lld, size=%d", cb->count, cb->size);
         cb->head = 0;
     }
-
-    cb->buffer[cb->head] = item;            // head ==0,1,2,3,4,5(loops, make it 0)
-    cb->head = (cb->head + 1) % (cb->size); // head==1,2,3,4,5,1
+    
+    cb->buffer[cb->head] = item;
+    cb->head = (cb->head + 1) % (cb->size); 
     cb->count++;
-    // printf("count is %lld head is %d, head value is %d\n",cb->count, cb->head, cb->buffer[cb->head]);
     return;
 }
