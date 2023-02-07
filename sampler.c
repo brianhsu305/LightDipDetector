@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "sampler.h"
 #include "circular_buffer.h"
 #include "periodTimer.h"
 #include "segDisplay.h"
@@ -281,19 +282,19 @@ void Sampler_printData()
     return;
 }
 
-void *Sampler_samplingThreadFunc()
+void *Sampler_samplingThreadFunc(void * arg)
 {
     Sampler_startSampling();
     return NULL;
 }
 
-void *Sampler_printThreadFunc()
+void *Sampler_printThreadFunc(void * arg)
 {
     Sampler_printData();
     return NULL;
 }
 
-void *segDisplay_threadFunc()
+void *segDisplay_threadFunc(void * arg)
 {
     segDisplayDip();
     return NULL;

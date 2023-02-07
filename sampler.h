@@ -24,9 +24,9 @@ int Sampler_getDipCount();
 void Sampler_threadInit(void);
 
 // Initialize Sampler thread functions
-void *Sampler_samplingThreadFunc(void);
-void *Sampler_printThreadFunc(void);
-void *segDisplay_threadFunc(void);
+void *Sampler_samplingThreadFunc(void * arg);
+void *Sampler_printThreadFunc(void * arg);
+void *segDisplay_threadFunc(void * arg);
 
 // Begin/end the background thread which samples light levels.
 void Sampler_startSampling(void);

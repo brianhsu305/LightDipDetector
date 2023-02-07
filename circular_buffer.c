@@ -4,7 +4,6 @@
 #include <string.h>
 #include "circular_buffer.h"
 
-// Reference: https://stackoverflow.com/questions/827691/how-do-you-implement-a-circular-buffer-in-c
 // initialize the circular buffer
 void buffer_init(circular_buffer *cb, int bufferSize)
 {

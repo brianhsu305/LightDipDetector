@@ -3,8 +3,11 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
 #include <stdbool.h>
 #include "sampler.h"
+#include "udp_sockets.h"
 
 #define MAX_LEN 2048
 #define PORT 12345
@@ -13,11 +16,11 @@ pthread_t UDP_thread;
 struct sockaddr_in mySocket, sinRemote;
 unsigned int sin_len = sizeof(sinRemote);
 char messageRx[MAX_LEN];
+char lastCommand[MAX_LEN];
 
 int socketDescriptor;
 int bytesRx;
 bool readingData = true;
-;
 
 void UDP_serverInit()
 {
@@ -27,7 +30,6 @@ void UDP_serverInit()
     mySocket.sin_port = htons(PORT);
     socketDescriptor = socket(PF_INET, SOCK_DGRAM, 0);
     bind(socketDescriptor, (struct sockaddr *)&mySocket, sizeof(mySocket));
-    printf("UDP is working\n");
 }
 
 // the received command is "help"
@@ -58,7 +60,6 @@ void UDP_replyHelp()
     freeSpace = freeSpace - strnlen(messageTx, freeSpace) - 1;
 
     strncat(messageTx, "<enter>  -- repeat last command.\n", freeSpace);
-    // freeSpace = freeSpace - strnlen(messageTx, freeSpace) - 1;
 
     // Send reply
     sin_len = sizeof(sinRemote);
@@ -92,32 +93,70 @@ void UDP_replyLength()
 
 void UDP_replyHistory()
 {
-    // char messageTx[MAX_LEN];
-    // char buf[MAX_LEN];
-    // int freeSpace = MAX_LEN;
-    // int size = Sampler_getHistorySize();
-    // double *history = Sampler_getHistory(&size);
-    // printf("HELOO %f\n", *history);
-    // for (int i=0; i<size; i++) {
-        
-    //     snprintf(buf, freeSpace, "%.3f, ", history+1);
-    //     strncat(messageTx, buf, freeSpace);
-    //     freeSpace = freeSpace - strnlen(messageTx, MAX_LEN) - 1;
-    // }
-    // // Send reply
-    // sin_len = sizeof(sinRemote);
-    // sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    char messageTx[MAX_LEN];
+    char buf[MAX_LEN];
+    int freeSpace = MAX_LEN;
+    int size = Sampler_getNumSamplesInHistory();
+    double *history = Sampler_getHistory(&size);
+    for (int i = 0; i < size; i++)
+    {
+
+        snprintf(buf, freeSpace, "%.3f, ", history[i]);
+        strncat(messageTx, buf, freeSpace);
+        freeSpace = freeSpace - strnlen(messageTx, MAX_LEN) - 1;
+
+        if (freeSpace < 0)
+        {
+            // Send reply
+            sin_len = sizeof(sinRemote);
+            sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+            messageTx[0] = '\0';
+            buf[0] = '\0';
+            freeSpace = MAX_LEN;
+        }
+    }
+    // Send reply
+    sin_len = sizeof(sinRemote);
+    strncat(messageTx, "\n", freeSpace);
+    free(history);
+    sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
 }
 
-void UDP_replyGet()
+void UDP_replyGet(int num)
 {
     char messageTx[MAX_LEN];
-    // int freeSpace;
-    snprintf(messageTx, MAX_LEN, "Number of samples taken = %lld\n", Sampler_getNumSamplesTaken());
-    // freeSpace = MAX_LEN - strnlen(messageTx, MAX_LEN) - 1;
+    // snprintf(messageTx, MAX_LEN, "INSIDE GET  = %d\n", num);
+    char buf[MAX_LEN];
+    int freeSpace = MAX_LEN;
+    int size = Sampler_getNumSamplesInHistory();
+    double *history = Sampler_getHistory(&size);
+    if (num > size) {
+        snprintf(messageTx, freeSpace, "input size is bigger then history size\n");
+        sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+        return;
+    }
+    for (int i = 0; i < num; i++)
+    {
+
+        snprintf(buf, freeSpace, "%.3f, ", history[size - i - 1]);
+        strncat(messageTx, buf, freeSpace);
+        freeSpace = freeSpace - strnlen(messageTx, MAX_LEN) - 1;
+
+        if (freeSpace < 0)
+        {
+            // Send reply
+            sin_len = sizeof(sinRemote);
+            sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+            messageTx[0] = '\0';
+            buf[0] = '\0';
+            freeSpace = MAX_LEN;
+        }
+    }
 
     // Send reply
     sin_len = sizeof(sinRemote);
+    strncat(messageTx, "\n", freeSpace);
+    free(history);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
 }
 
@@ -135,7 +174,6 @@ void UDP_replyStop()
 {
     char messageTx[MAX_LEN];
     snprintf(messageTx, MAX_LEN, "Program Terminating.\n");
-    
 
     // Send reply
     sin_len = sizeof(sinRemote);
@@ -146,61 +184,62 @@ void UDP_replyStop()
 
 void UDP_replyEnter()
 {
-    char messageTx[MAX_LEN];
-    // int freeSpace;
-    snprintf(messageTx, MAX_LEN, "Number of samples taken = %lld\n", Sampler_getNumSamplesTaken());
-    // freeSpace = MAX_LEN - strnlen(messageTx, MAX_LEN) - 1;
+    // copy the last command
+    snprintf(messageRx, MAX_LEN, lastCommand);
+    UDP_readCommand(lastCommand);
 
-    // Send reply
-    sin_len = sizeof(sinRemote);
-    sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    // // Send reply
 }
 
-void UDP_receiveData()
+void UDP_readCommand(char *command)
 {
-    bytesRx = recvfrom(socketDescriptor, messageRx, MAX_LEN - 1, 0, (struct sockaddr *)&sinRemote, &sin_len);
-    if (strncmp("help\n", messageRx, sizeof("help")) == 0)
+    if (strncmp("help\n", command, sizeof("help")) == 0)
     {
         UDP_replyHelp();
     }
-    else if (strncmp("count\n", messageRx, sizeof("count")) == 0)
+    else if (strncmp("count\n", command, sizeof("count")) == 0)
     {
         UDP_replyCount();
     }
-    else if (strncmp("length\n", messageRx, sizeof("length")) == 0)
+    else if (strncmp("length\n", command, sizeof("length")) == 0)
     {
         UDP_replyLength();
     }
-    else if (strncmp("history\n", messageRx, sizeof("history")) == 0)
+    else if (strncmp("history\n", command, sizeof("history")) == 0)
     {
         UDP_replyHistory();
     }
-    else if (strncmp("get 10\n", messageRx, sizeof("get 10")) == 0)
+    else if (strncmp("get", command, *strtok(command, " ")) == 0)
     {
-        UDP_replyGet();
+
+        // check if the number is integer
+        int num = atoi(strtok(NULL, " "));
+        UDP_replyGet(num);
     }
-    else if (strncmp("dips\n", messageRx, sizeof("dips")) == 0)
+    else if (strncmp("dips\n", command, sizeof("dips")) == 0)
     {
         UDP_replyDips();
     }
-    else if (strncmp("stop\n", messageRx, sizeof("stop")) == 0)
+    else if (strncmp("stop\n", command, sizeof("stop")) == 0)
     {
         UDP_replyStop();
     }
-    else if (strncmp("<enter>\n", messageRx, sizeof("<enter>")) == 0)
+    else if (strncmp("\n", command, sizeof("")) == 0)
     {
         UDP_replyEnter();
     }
 
-    printf("Message received (%d bytes): '%s'", bytesRx, messageRx);
+    strncpy(lastCommand, command, MAX_LEN);
+    printf("Message received (%d bytes): '%s'", bytesRx, command);
 }
 
-void *UDP_threadFunc()
+void *UDP_threadFunc(void *arg)
 {
     UDP_serverInit();
     while (readingData)
     {
-        UDP_receiveData();
+        bytesRx = recvfrom(socketDescriptor, messageRx, MAX_LEN - 1, 0, (struct sockaddr *)&sinRemote, &sin_len);
+        UDP_readCommand(messageRx);
     }
     return NULL;
 }
