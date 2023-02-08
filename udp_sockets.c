@@ -125,12 +125,12 @@ void UDP_replyHistory()
 void UDP_replyGet(int num)
 {
     char messageTx[MAX_LEN];
-    // snprintf(messageTx, MAX_LEN, "INSIDE GET  = %d\n", num);
     char buf[MAX_LEN];
     int freeSpace = MAX_LEN;
     int size = Sampler_getNumSamplesInHistory();
     double *history = Sampler_getHistory(&size);
-    if (num > size) {
+    if (num > size)
+    {
         snprintf(messageTx, freeSpace, "input size is bigger then history size\n");
         sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
         return;
@@ -158,6 +158,8 @@ void UDP_replyGet(int num)
     strncat(messageTx, "\n", freeSpace);
     free(history);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    messageTx[0] = '\0';
+    buf[0] = '\0';
 }
 
 void UDP_replyDips()
@@ -168,6 +170,7 @@ void UDP_replyDips()
     // Send reply
     sin_len = sizeof(sinRemote);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    messageTx[0] = '\0';
 }
 
 void UDP_replyStop()
@@ -191,6 +194,16 @@ void UDP_replyEnter()
     // // Send reply
 }
 
+void UDP_unknownCommand(void)
+{
+    char messageTx[MAX_LEN];
+    snprintf(messageTx, MAX_LEN, "Unknown Command. Must enter a valid command!\n");
+
+    // Send reply
+    sin_len = sizeof(sinRemote);
+    sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+}
+
 void UDP_readCommand(char *command)
 {
     if (strncmp("help\n", command, sizeof("help")) == 0)
@@ -211,7 +224,6 @@ void UDP_readCommand(char *command)
     }
     else if (strncmp("get", command, *strtok(command, " ")) == 0)
     {
-
         // check if the number is integer
         int num = atoi(strtok(NULL, " "));
         UDP_replyGet(num);
@@ -227,6 +239,10 @@ void UDP_readCommand(char *command)
     else if (strncmp("\n", command, sizeof("")) == 0)
     {
         UDP_replyEnter();
+    }
+    else
+    {
+        UDP_unknownCommand();
     }
 
     strncpy(lastCommand, command, MAX_LEN);

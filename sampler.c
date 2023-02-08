@@ -22,13 +22,13 @@
 Period_statistics_t pStats;
 pthread_t lightSampleThread, printDataThread, segDisplayThread;
 static pthread_mutex_t myMutex = PTHREAD_MUTEX_INITIALIZER;
-static long long bufferSize = 10000;
+static long long startingBufferSize = 1000;
 circular_buffer lightSampleBuffer;
 static bool readingData = true, printingData = true;
 static int potValue;
 static int historySize;
 static double sampleLightLevel;
-static double avgLightLevel = -1;
+static double avgLightLevel = 0;
 static int dipCount = 0;
 static double PrevAveLightLevel;
 static bool dipDetectReady = false;
@@ -71,7 +71,7 @@ int getVoltageReading(char *a2dFileVoltagePath)
 double Sampler_getAverageReading(void)
 {
     // the average has not been calculated
-    if (avgLightLevel == -1)
+    if (avgLightLevel == 0)
     {
         avgLightLevel = lightSampleBuffer.buffer[lightSampleBuffer.tail];
     }
@@ -82,7 +82,7 @@ double Sampler_getAverageReading(void)
     }
 
     // increment tail index after reading the data
-    if (lightSampleBuffer.count % lightSampleBuffer.size == 0)
+    if (lightSampleBuffer.head % lightSampleBuffer.size == 0)
     {
         lightSampleBuffer.tail = 0;
     }
@@ -103,29 +103,17 @@ double *Sampler_getHistory(int *length)
 {
     double *copySample;
     copySample = malloc(sizeof(double) * (*length + 1));
+    pthread_mutex_lock(&myMutex);
     for (int i = 0; i < *length; i++)
     {
         copySample[i] = lightSampleBuffer.buffer[i];
     }
-    // memcpy(copySample, &lightSampleBuffer.buffer, *length);
+    pthread_mutex_unlock(&myMutex);
     return copySample;
 }
 
 void Sampler_dipDetection()
 {
-    // Get a copy of history buffer
-    // circular_buffer copyBuffer;
-    // buffer_init(&copyBuffer, lightSampleBuffer.size);
-    // copyBuffer.buffer = Sampler_getHistory(&lightSampleBuffer.size);
-
-    // Calculate average light level in history
-    // double avgHistoryLightLevel = 0;
-    // for (int i = 0; i < lightSampleBuffer.size; i++)
-    // {
-    //     avgHistoryLightLevel += lightSampleBuffer.buffer[i];
-    // }
-    // avgHistoryLightLevel = avgHistoryLightLevel / lightSampleBuffer.size;
-
     // When detected light is lower then average by 0.1V
     if (dipDetectReady)
     {
@@ -143,14 +131,13 @@ void Sampler_dipDetection()
             dipDetectReady = true;
         }
     }
-    // free(copyBuffer.buffer);
 }
 
 // Begin/end the background thread which samples light levels.
 void Sampler_startSampling(void)
 {
-    buffer_init(&lightSampleBuffer, bufferSize);
-    
+    buffer_init(&lightSampleBuffer, startingBufferSize);
+
     while (readingData)
     {
 
@@ -160,10 +147,11 @@ void Sampler_startSampling(void)
         sampleLightLevel = ((double)voltageReading / A2D_MAX_READING) * A2D_VOLTAGE_REF_V;
         // add voltage sample into buffer
         pthread_mutex_lock(&myMutex);
-        buffer_AddData(&lightSampleBuffer, sampleLightLevel);
-        avgLightLevel = Sampler_getAverageReading();
-        // printf("Value %5d ==> %5.2fV, avgLightLevel = %.2f\n", voltageReading, sampleLightLevel, avgLightLevel);
-        Sampler_dipDetection();
+        {
+            buffer_AddData(&lightSampleBuffer, sampleLightLevel);
+            avgLightLevel = Sampler_getAverageReading();
+            Sampler_dipDetection();
+        }
         pthread_mutex_unlock(&myMutex);
         sleepForMs(1);
     }
@@ -187,14 +175,45 @@ void Sampler_stopSampling(void)
 // Set the maximum number of samples to store in the history.
 void Sampler_setHistorySize(int newSize)
 {
-    circular_buffer tempBuffer;
-    buffer_init(&tempBuffer, newSize);
-    tempBuffer.head = lightSampleBuffer.head;
-    tempBuffer.tail = lightSampleBuffer.tail;
-    tempBuffer.count = lightSampleBuffer.count;
+    // // set the buffer length to newSize
+    // lightSampleBuffer.size = newSize;
+    // return;
+    double *tempBuffer = malloc(sizeof(double) * (newSize + 1));
+    pthread_mutex_lock(&myMutex);
+    {
+        lightSampleBuffer.head = lightSampleBuffer.size;
+        lightSampleBuffer.tail = lightSampleBuffer.size;
+        // if then new size > the original size
+        if (newSize >= lightSampleBuffer.size)
+        {
+            int numOfSamples = lightSampleBuffer.size;
+            if (numOfSamples >= lightSampleBuffer.count)
+            {
+                numOfSamples = lightSampleBuffer.count;
+            }
 
-    // set the buffer length to newSize
-    lightSampleBuffer.size = newSize;
+            for (int i = 0; i < numOfSamples; i++)
+            {
+                tempBuffer[i] = lightSampleBuffer.buffer[i];
+            }
+        }
+        // if the new size <= the original size
+        else
+        {
+            for (int i = 0; i < newSize; i++)
+            {
+                tempBuffer[i] = lightSampleBuffer.buffer[i + lightSampleBuffer.size - newSize];
+            }
+            lightSampleBuffer.head = 0;
+            lightSampleBuffer.tail = 0;
+        }
+        lightSampleBuffer.size = newSize;
+
+        // Copy the new buffer data to the circular buffer struct
+        free(lightSampleBuffer.buffer);
+        lightSampleBuffer.buffer = tempBuffer;
+    }
+    pthread_mutex_unlock(&myMutex);
     return;
 }
 
@@ -213,7 +232,16 @@ int Sampler_getHistorySize(void)
 // May be less than the history size if the history is not yet full.
 int Sampler_getNumSamplesInHistory()
 {
-    if (lightSampleBuffer.count > lightSampleBuffer.size)
+    // int num = 0;
+    // for (int i = 0; i < lightSampleBuffer.size; i++)
+    // {
+    //     if (lightSampleBuffer.buffer[i] != 0)
+    //     {
+    //         num++;
+    //     }
+    // }
+    // return num;
+    if (lightSampleBuffer.count >= lightSampleBuffer.size)
     {
         return lightSampleBuffer.size;
     }
@@ -257,7 +285,8 @@ void segDisplayDip(void)
     return;
 }
 
-int Sampler_getDipCount() {
+int Sampler_getDipCount()
+{
     return dipCount;
 }
 
@@ -267,34 +296,42 @@ void Sampler_printData()
     while (printingData)
     {
 
-        pthread_mutex_lock(&myMutex);
+        // pthread_mutex_lock(&myMutex);
+        {
+            Sampler_setHistorySize(Sampler_getHistorySize());
+            historySize = Sampler_getNumSamplesInHistory();
+        }
+        // pthread_mutex_unlock(&myMutex);
 
-        historySize = Sampler_getNumSamplesInHistory();
-        Sampler_setHistorySize(Sampler_getHistorySize());
         Period_getStatisticsAndClear(PERIOD_EVENT_SAMPLE_LIGHT, &pStats);
         printf("Samples/s = %d Pot Value = %d history size = %d avg = %.3f dips = %d Sampling[%.3f, %.3f] avg %.3f/%d \n", pStats.numSamples, potValue, historySize, avgLightLevel, dipCount, pStats.minPeriodInMs, pStats.maxPeriodInMs, pStats.avgPeriodInMs, pStats.numSamples);
-        printf("Line 2\n");
-        pthread_mutex_unlock(&myMutex);
 
+        double *history = Sampler_getHistory(&historySize);
+        for (int i = 200; i < historySize; i += 200)
+        {
+            printf(" %.3f", history[i]);
+        }
+        free(history);
+        printf("\n");
         sleepForMs(1000);
     }
 
     return;
 }
 
-void *Sampler_samplingThreadFunc(void * arg)
+void *Sampler_samplingThreadFunc(void *arg)
 {
     Sampler_startSampling();
     return NULL;
 }
 
-void *Sampler_printThreadFunc(void * arg)
+void *Sampler_printThreadFunc(void *arg)
 {
     Sampler_printData();
     return NULL;
 }
 
-void *segDisplay_threadFunc(void * arg)
+void *segDisplay_threadFunc(void *arg)
 {
     segDisplayDip();
     return NULL;

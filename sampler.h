@@ -5,28 +5,11 @@
 #ifndef _SAMPLER_H_
 #define _SAMPLER_H_
 
-// sleep for X amount of time
-void sleepForMs(long long delayInMs);
-
-// get the reading from the light sensor
-int getVoltageReading(char *voltagePath);
-
-// print related data
-void Sampler_printData(void);
-
-// detect for the number of dips
-void Sampler_dipDetection(void);
-
 // Get dip count 
 int Sampler_getDipCount();
 
 // Initialize all threads in sampler
 void Sampler_threadInit(void);
-
-// Initialize Sampler thread functions
-void *Sampler_samplingThreadFunc(void * arg);
-void *Sampler_printThreadFunc(void * arg);
-void *segDisplay_threadFunc(void * arg);
 
 // Begin/end the background thread which samples light levels.
 void Sampler_startSampling(void);
