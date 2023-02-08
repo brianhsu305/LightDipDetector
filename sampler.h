@@ -6,10 +6,16 @@
 #define _SAMPLER_H_
 
 // Get dip count 
-int Sampler_getDipCount();
+int Sampler_getDipCount(void);
 
 // Initialize all threads in sampler
 void Sampler_threadInit(void);
+
+// Print related data on terminal
+void Sampler_printData(void);
+
+// Call functions in segDisplay.c to perform 2-Digit 14 Segment Display Feature
+void segDisplayDip(void);
 
 // Begin/end the background thread which samples light levels.
 void Sampler_startSampling(void);

@@ -29,7 +29,18 @@ void buffer_free(circular_buffer *cb)
     // cb->tail = NULL;
     return;
 }
-
+int getNumSamples(circular_buffer *cb)
+{
+    int num = 0;
+    for (int i = 0; i < cb->size; i++)
+    {
+        if (cb->buffer[i] != 0)
+        {
+            num++;
+        }
+    }
+    return num;
+}
 // add data to the light sample buffer
 void buffer_AddData(circular_buffer *cb, double item)
 {
@@ -43,6 +54,8 @@ void buffer_AddData(circular_buffer *cb, double item)
     cb->buffer[cb->head] = item;
     cb->head = (cb->head + 1) % (cb->size);
     cb->count++;
+    // printf("\nhead = %d, tail= %d, count = %lld, getNumSamples = %d\n", cb->head, cb->tail, cb->count, getNumSamples(cb));
+
     return;
 }
 
@@ -52,7 +65,7 @@ void buffer_resize(circular_buffer *cb, int length)
     cb->head = cb->size;
     cb->tail = cb->size;
     // if then new size > the original size
-    if (length >= cb->size) // length 5 cbsize 3
+    if (length >= cb->size)
     {
         int numOfSamples = cb->size;
         if (numOfSamples >= cb->count)
@@ -82,18 +95,7 @@ void buffer_resize(circular_buffer *cb, int length)
     cb->buffer = tempBuffer;
 }
 
-int getNumSamples(circular_buffer *cb)
-{
-    int num = 0;
-    for (int i = 0; i < cb->size; i++)
-    {
-        if (cb->buffer[i] != 0)
-        {
-            num++;
-        }
-    }
-    return num;
-}
+
 
 void buffer_printData(circular_buffer *cb)
 {
@@ -101,7 +103,7 @@ void buffer_printData(circular_buffer *cb)
     {
         printf("%1.f ", cb->buffer[i]);
     }
-    // printf("\nhead = %d, count = %d, numSamples = %d\n", cb->head, cb->count, getNumSamples(cb));
+    printf("\nhead = %d, tail= %d, count = %lld, getNumSamples = %d\n", cb->head, cb->tail, cb->count, getNumSamples(cb));
 }
 
 // int main()

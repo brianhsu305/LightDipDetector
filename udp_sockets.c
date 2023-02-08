@@ -12,16 +12,23 @@
 #define MAX_LEN 2048
 #define PORT 12345
 
-pthread_t UDP_thread;
-struct sockaddr_in mySocket, sinRemote;
-unsigned int sin_len = sizeof(sinRemote);
-char messageRx[MAX_LEN];
-char lastCommand[MAX_LEN];
+static pthread_t UDP_thread;
+static struct sockaddr_in mySocket, sinRemote;
+static unsigned int sin_len = sizeof(sinRemote);
+static char messageRx[MAX_LEN];
+static char lastCommand[MAX_LEN];
 
-int socketDescriptor;
-int bytesRx;
-bool readingData = true;
+static int socketDescriptor;
+static int bytesRx;
+static bool readingData = true;
 
+void clearMessageTx(char *messageTx)
+{
+    for (int i = 0; i < MAX_LEN; i++)
+    {
+        messageTx[i] = '\0';
+    }
+}
 void UDP_serverInit()
 {
     memset(&mySocket, 0, sizeof(mySocket));
@@ -64,16 +71,19 @@ void UDP_replyHelp()
     // Send reply
     sin_len = sizeof(sinRemote);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    clearMessageTx(messageTx);
 }
 
 void UDP_replyCount()
 {
     char messageTx[MAX_LEN];
-    snprintf(messageTx, MAX_LEN, "Number of samples taken = %lld\n", Sampler_getNumSamplesTaken());
+    int freeSpace = MAX_LEN;
+    snprintf(messageTx, freeSpace, "Number of samples taken = %lld\n", Sampler_getNumSamplesTaken());
 
     // Send reply
     sin_len = sizeof(sinRemote);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    clearMessageTx(messageTx);
 }
 
 void UDP_replyLength()
@@ -89,6 +99,7 @@ void UDP_replyLength()
     // Send reply
     sin_len = sizeof(sinRemote);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    clearMessageTx(messageTx);
 }
 
 void UDP_replyHistory()
@@ -110,8 +121,7 @@ void UDP_replyHistory()
             // Send reply
             sin_len = sizeof(sinRemote);
             sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
-            messageTx[0] = '\0';
-            buf[0] = '\0';
+            clearMessageTx(messageTx);
             freeSpace = MAX_LEN;
         }
     }
@@ -120,6 +130,7 @@ void UDP_replyHistory()
     strncat(messageTx, "\n", freeSpace);
     free(history);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    clearMessageTx(messageTx);
 }
 
 void UDP_replyGet(int num)
@@ -133,6 +144,7 @@ void UDP_replyGet(int num)
     {
         snprintf(messageTx, freeSpace, "input size is bigger then history size\n");
         sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+        clearMessageTx(messageTx);
         return;
     }
     for (int i = 0; i < num; i++)
@@ -147,8 +159,7 @@ void UDP_replyGet(int num)
             // Send reply
             sin_len = sizeof(sinRemote);
             sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
-            messageTx[0] = '\0';
-            buf[0] = '\0';
+            clearMessageTx(messageTx);
             freeSpace = MAX_LEN;
         }
     }
@@ -158,37 +169,41 @@ void UDP_replyGet(int num)
     strncat(messageTx, "\n", freeSpace);
     free(history);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
-    messageTx[0] = '\0';
-    buf[0] = '\0';
+    clearMessageTx(messageTx);
 }
 
 void UDP_replyDips()
 {
     char messageTx[MAX_LEN];
-    snprintf(messageTx, MAX_LEN, "Dips = %d\n", Sampler_getDipCount());
+    int freeSpace = MAX_LEN;
+    snprintf(messageTx, freeSpace, "Dips = %d\n", Sampler_getDipCount());
 
     // Send reply
     sin_len = sizeof(sinRemote);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
-    messageTx[0] = '\0';
+    clearMessageTx(messageTx);
 }
 
 void UDP_replyStop()
 {
     char messageTx[MAX_LEN];
-    snprintf(messageTx, MAX_LEN, "Program Terminating.\n");
+    int freeSpace = MAX_LEN;
+    snprintf(messageTx, freeSpace, "Program Terminating.\n");
 
     // Send reply
     sin_len = sizeof(sinRemote);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    clearMessageTx(messageTx);
     close(socketDescriptor);
+    readingData = false;
     Sampler_stopSampling();
 }
 
 void UDP_replyEnter()
 {
     // copy the last command
-    snprintf(messageRx, MAX_LEN, lastCommand);
+    int freeSpace = MAX_LEN;
+    snprintf(messageRx, freeSpace, lastCommand);
     UDP_readCommand(lastCommand);
 
     // // Send reply
@@ -197,11 +212,13 @@ void UDP_replyEnter()
 void UDP_unknownCommand(void)
 {
     char messageTx[MAX_LEN];
-    snprintf(messageTx, MAX_LEN, "Unknown Command. Must enter a valid command!\n");
+    int freeSpace = MAX_LEN;
+    snprintf(messageTx, freeSpace, "Unknown Command. Must enter a valid command!\n");
 
     // Send reply
     sin_len = sizeof(sinRemote);
     sendto(socketDescriptor, messageTx, strlen(messageTx), 0, (struct sockaddr *)&sinRemote, sin_len);
+    clearMessageTx(messageTx);
 }
 
 void UDP_readCommand(char *command)

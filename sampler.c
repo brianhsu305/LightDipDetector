@@ -10,6 +10,7 @@
 #include "periodTimer.h"
 #include "segDisplay.h"
 #include "udp_sockets.h"
+#include "sampler.h"
 
 #define A2D_FILE_VOLTAGE1 "/sys/bus/iio/devices/iio:device0/in_voltage1_raw"
 #define A2D_FILE_VOLTAGE0 "/sys/bus/iio/devices/iio:device0/in_voltage0_raw"
@@ -19,11 +20,11 @@
 #define I2C_RIGHT_DIGIT "/sys/class/gpio/gpio44/value"
 #define I2C_LEFT_DIGIT "/sys/class/gpio/gpio61/value"
 
-Period_statistics_t pStats;
-pthread_t lightSampleThread, printDataThread, segDisplayThread;
+static Period_statistics_t pStats;
+static pthread_t lightSampleThread, printDataThread, segDisplayThread;
 static pthread_mutex_t myMutex = PTHREAD_MUTEX_INITIALIZER;
-static long long startingBufferSize = 1000;
-circular_buffer lightSampleBuffer;
+static long long startingBufferSize = 1001;
+static circular_buffer lightSampleBuffer;
 static bool readingData = true, printingData = true;
 static int potValue;
 static int historySize;
@@ -32,6 +33,34 @@ static double avgLightLevel = 0;
 static int dipCount = 0;
 static double PrevAveLightLevel;
 static bool dipDetectReady = false;
+static int idleCount = 0;
+
+void *Sampler_samplingThreadFunc(void *arg)
+{
+    Sampler_startSampling();
+    return NULL;
+}
+
+void *Sampler_printThreadFunc(void *arg)
+{
+    Sampler_printData();
+    return NULL;
+}
+
+void *segDisplay_threadFunc(void *arg)
+{
+    segDisplayDip();
+    return NULL;
+}
+
+void Sampler_threadInit()
+{
+    Period_init();
+    pthread_create(&lightSampleThread, NULL, Sampler_samplingThreadFunc, NULL);
+    pthread_create(&printDataThread, NULL, Sampler_printThreadFunc, NULL);
+    pthread_create(&segDisplayThread, NULL, segDisplay_threadFunc, NULL);
+    UDP_threadInit();
+}
 
 void sleepForMs(long long delayInMs)
 {
@@ -123,6 +152,11 @@ void Sampler_dipDetection()
             PrevAveLightLevel = avgLightLevel;
             dipDetectReady = false;
         }
+        // No dip detected
+        else
+        {
+            idleCount++;
+        }
     }
     else
     {
@@ -179,41 +213,46 @@ void Sampler_setHistorySize(int newSize)
     // lightSampleBuffer.size = newSize;
     // return;
     double *tempBuffer = malloc(sizeof(double) * (newSize + 1));
-    pthread_mutex_lock(&myMutex);
-    {
-        lightSampleBuffer.head = lightSampleBuffer.size;
-        lightSampleBuffer.tail = lightSampleBuffer.size;
-        // if then new size > the original size
-        if (newSize >= lightSampleBuffer.size)
-        {
-            int numOfSamples = lightSampleBuffer.size;
-            if (numOfSamples >= lightSampleBuffer.count)
-            {
-                numOfSamples = lightSampleBuffer.count;
-            }
 
-            for (int i = 0; i < numOfSamples; i++)
+    // if then new size > the original size
+    if (newSize >= lightSampleBuffer.size) // newsize=4095,lightSampleBuffer.size=1001
+    {
+
+        // fresh start, count is smaller then original size
+        if (lightSampleBuffer.size >= lightSampleBuffer.count) // size=1001, count=315
+        {
+
+            for (int i = 0; i < lightSampleBuffer.count; i++)
             {
                 tempBuffer[i] = lightSampleBuffer.buffer[i];
             }
         }
-        // if the new size <= the original size
+        // size < count (has looped)
         else
         {
-            for (int i = 0; i < newSize; i++)
+            for (int i = 0; i < lightSampleBuffer.size; i++)
             {
-                tempBuffer[i] = lightSampleBuffer.buffer[i + lightSampleBuffer.size - newSize];
+                tempBuffer[i] = lightSampleBuffer.buffer[i];
             }
-            lightSampleBuffer.head = 0;
-            lightSampleBuffer.tail = 0;
         }
-        lightSampleBuffer.size = newSize;
-
-        // Copy the new buffer data to the circular buffer struct
-        free(lightSampleBuffer.buffer);
-        lightSampleBuffer.buffer = tempBuffer;
     }
-    pthread_mutex_unlock(&myMutex);
+    // if the new size <= the original size
+    else
+    {
+        for (int i = 0; i < newSize; i++)
+        {
+            tempBuffer[i] = lightSampleBuffer.buffer[i + lightSampleBuffer.size - newSize];
+        }
+        // reset head and tail index to the start
+        lightSampleBuffer.head = 0; // original buff size 1000 (head could be at 505), lower it to 500
+        lightSampleBuffer.tail = 0;
+    }
+    lightSampleBuffer.size = newSize; // 4095
+
+    // Copy the new buffer data to the circular buffer struct
+    free(lightSampleBuffer.buffer);
+    lightSampleBuffer.buffer = tempBuffer;
+
     return;
 }
 
@@ -232,23 +271,24 @@ int Sampler_getHistorySize(void)
 // May be less than the history size if the history is not yet full.
 int Sampler_getNumSamplesInHistory()
 {
-    // int num = 0;
-    // for (int i = 0; i < lightSampleBuffer.size; i++)
+    int num = 0;
+    for (int i = 0; i < lightSampleBuffer.size; i++)
+    {
+        if (lightSampleBuffer.buffer[i] != 0)
+        {
+            num++;
+        }
+    }
+
+    return num;
+    // if (lightSampleBuffer.count >= lightSampleBuffer.size)
     // {
-    //     if (lightSampleBuffer.buffer[i] != 0)
-    //     {
-    //         num++;
-    //     }
+    //     return lightSampleBuffer.size;
     // }
-    // return num;
-    if (lightSampleBuffer.count >= lightSampleBuffer.size)
-    {
-        return lightSampleBuffer.size;
-    }
-    else
-    {
-        return lightSampleBuffer.head;
-    }
+    // else
+    // {
+    //     return lightSampleBuffer.head;
+    // }
 }
 
 // Get the total number of light level samples taken so far.
@@ -290,58 +330,56 @@ int Sampler_getDipCount()
     return dipCount;
 }
 
+// If the history contains 10 dips, then as the program sits idle (no change in light), it will count down as the dips get pushed out of the history by new samples.
+void Sampler_observeForDips(double *history, int sizeOfHistory, double average)
+{
+    int dipObserve = 0;
+
+    // if the light is idle (2500 samples with no dips)
+    if (idleCount > 2500)
+    {
+        //check for # of dips in the history for every 200th sample
+        for (int i = 100; i < sizeOfHistory; i += 100)
+        {
+            if (average - history[i] > 0.1)
+            {
+                dipObserve++;
+            }
+        }
+        dipCount = dipObserve;
+    }
+    return;
+}
+
 // print relavent data
 void Sampler_printData()
 {
     while (printingData)
     {
 
-        // pthread_mutex_lock(&myMutex);
+        pthread_mutex_lock(&myMutex);
         {
             Sampler_setHistorySize(Sampler_getHistorySize());
+            // printf("head: %d\n", lightSampleBuffer.head);
             historySize = Sampler_getNumSamplesInHistory();
         }
-        // pthread_mutex_unlock(&myMutex);
-
+        pthread_mutex_unlock(&myMutex);
+        double *history = Sampler_getHistory(&historySize);
+        // Sampler_observeForDips(history, historySize, avgLightLevel);
         Period_getStatisticsAndClear(PERIOD_EVENT_SAMPLE_LIGHT, &pStats);
         printf("Samples/s = %d Pot Value = %d history size = %d avg = %.3f dips = %d Sampling[%.3f, %.3f] avg %.3f/%d \n", pStats.numSamples, potValue, historySize, avgLightLevel, dipCount, pStats.minPeriodInMs, pStats.maxPeriodInMs, pStats.avgPeriodInMs, pStats.numSamples);
 
-        double *history = Sampler_getHistory(&historySize);
         for (int i = 200; i < historySize; i += 200)
         {
-            printf(" %.3f", history[i]);
+            if (history[i] != 0)
+            {
+                printf(" %.3f", history[i]);
+            }
         }
-        free(history);
         printf("\n");
+        free(history);
         sleepForMs(1000);
     }
 
     return;
-}
-
-void *Sampler_samplingThreadFunc(void *arg)
-{
-    Sampler_startSampling();
-    return NULL;
-}
-
-void *Sampler_printThreadFunc(void *arg)
-{
-    Sampler_printData();
-    return NULL;
-}
-
-void *segDisplay_threadFunc(void *arg)
-{
-    segDisplayDip();
-    return NULL;
-}
-
-void Sampler_threadInit()
-{
-    Period_init();
-    pthread_create(&lightSampleThread, NULL, Sampler_samplingThreadFunc, NULL);
-    pthread_create(&printDataThread, NULL, Sampler_printThreadFunc, NULL);
-    pthread_create(&segDisplayThread, NULL, segDisplay_threadFunc, NULL);
-    UDP_threadInit();
 }
